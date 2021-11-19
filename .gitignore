@@ -1,0 +1,7 @@
+**/__pycache__
+*.log
+*.pickle
+*.pid
+*.out
+.ipynb_checkpoints
+env/
