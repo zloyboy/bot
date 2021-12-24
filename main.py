@@ -14,6 +14,16 @@ def _get_now_datetime() -> datetime.datetime:
     now = datetime.datetime.now(tz)
     return now
 
+def _make_bar(val: float) -> str:
+    out = ''
+    if 0 < val < 100:
+        cnt = round(val) // 5
+        #out = '|'
+        out += '|'*cnt
+        out += '_'*(20 - cnt)
+        #out += '|'
+    return out
+
 bot = telebot.TeleBot('')
 
 @bot.message_handler(content_types = ['text'])
@@ -39,7 +49,11 @@ def answer(call: types.CallbackQuery):
     cntAll = db.count_users()[0]
     cntYes = db.count_res()[0]
     cntNo = cntAll - cntYes
+    perYes = cntYes / cntAll * 100
+    perNo = cntNo / cntAll * 100
     bot.send_message(call.message.chat.id,
-        'Опрошено ' + str(cntAll) + '\nПереболело ' + str(cntYes) + '\nНе болело ' + str(cntNo))
+        'Опрошено: ' + str(cntAll) +
+        '\n' + _make_bar(perYes) + str(perYes) + '%' + ' переболело: ' + str(cntYes) +
+        '\n' + _make_bar(perNo) + str(perYes) + '%' +  ' не болело: ' + str(cntNo)) 
 
 bot.polling(none_stop = True, interval = 0)
