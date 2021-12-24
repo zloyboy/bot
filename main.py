@@ -1,24 +1,45 @@
-#import logging
-import os
+import telebot
+from telebot import types
+import datetime
+import pytz
+import db
 
-import aiohttp
-from aiogram import Bot, Dispatcher, executor, types
+def _get_now_formatted() -> str:
+    """Возвращает сегодняшнюю дату строкой"""
+    return _get_now_datetime().strftime("%Y-%m-%d %H:%M:%S")
 
+def _get_now_datetime() -> datetime.datetime:
+    """Возвращает сегодняшний datetime с учётом времненной зоны Мск."""
+    tz = pytz.timezone("Europe/Moscow")
+    now = datetime.datetime.now(tz)
+    return now
 
+bot = telebot.TeleBot('')
 
+@bot.message_handler(content_types = ['text'])
+def get_text(message: types.Message):
+    keyboard = types.InlineKeyboardMarkup()
+    key_yes = types.InlineKeyboardButton(text = 'Да', callback_data = '1')
+    key_no = types.InlineKeyboardButton(text = 'Нет', callback_data = '0')
+    keyboard.add(key_yes, key_no)
+    bot.send_message(message.chat.id, 'Вы переболели covid19?', reply_markup=keyboard)
 
-#logging.basicConfig(level=logging.INFO)
+@bot.callback_query_handler(func=lambda call: True)
+def answer(call: types.CallbackQuery):
+    id = call.from_user.id
+    if db.new_id(id):
+        print('insert id ', id)
+        inserted_row_id = db.insert("user", {
+        "id": id,
+        "created": _get_now_formatted(),
+        "res": int(call.data)
+        })
+    else:
+        print('exist id ', id)
+    cntAll = db.count_users()[0]
+    cntYes = db.count_res()[0]
+    cntNo = cntAll - cntYes
+    bot.send_message(call.message.chat.id,
+        'Опрошено ' + str(cntAll) + '\nПереболело ' + str(cntYes) + '\nНе болело ' + str(cntNo))
 
-API_TOKEN = os.getenv("TELEGRAM_API_TOKEN")
-#ACCESS_ID = os.getenv("TELEGRAM_ACCESS_ID")
-
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
-#dp.middleware.setup(AccessMiddleware(ACCESS_ID))
-
-@dp.message_handler(commands=['start', 'help'])
-async def start_command(message: types.Message):
-    await message.answer("Hello!!!")
-
-if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
+bot.polling(none_stop = True, interval = 0)
