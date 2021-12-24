@@ -2,10 +2,11 @@ FROM python:3.8
 
 WORKDIR /home
 
-ENV TELEGRAM_API_TOKEN=
-ENV TELEGRAM_ACCESS_ID=
+ENV TZ=Europe/Moscow
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-RUN pip install -U pip aiogram
+RUN pip install -U pip pytelegrambotapi telebot pytz && apt-get update && apt-get install sqlite3
 COPY *.py ./
+COPY *.sql ./
 
 ENTRYPOINT ["python3", "main.py"]
