@@ -8,10 +8,13 @@ conn = sqlite3.connect(os.path.join("db", "stat.db"), check_same_thread=False)
 cursor = conn.cursor()
 
 
-def new_id(id: int):
-    cursor.execute(f"SELECT id FROM user")
+def new_id(row_id: int):
+    cursor.execute(f"SELECT id FROM user WHERE id={row_id}")
     return (cursor.fetchone() is None)
 
+def check_id_name(row_id: int):
+    cursor.execute(f"SELECT id, name FROM user WHERE id={row_id}")
+    return cursor.fetchone()
 
 def count_users():
     cursor.execute(f"SELECT count(*) FROM user")

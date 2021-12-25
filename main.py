@@ -21,7 +21,7 @@ def _get_now_datetime() -> datetime.datetime:
 
 def _make_bar(val: float) -> str:
     out = ''
-    if 0 < val < 100:
+    if 0 <= val <= 100:
         cnt = round(val) // 5
         out += '|'*cnt
         out += '*'*(20 - cnt)
@@ -32,7 +32,8 @@ def _send_stat(bot: telebot.TeleBot, id: int):
     perYes = cntYes / cntAll * 100
     perNo = cntNo / cntAll * 100
     bot.send_message(id,
-        'Опрошено: ' + str(cntAll) +
+        'Независимая статистика по COVID-19' +
+        '\nОпрошено: ' + str(cntAll) +
         '\n' + _make_bar(perYes) + ' {:.2f}'.format(perYes) + '%' + ' переболело: ' + str(cntYes) +
         '\n' + _make_bar(perNo) + ' {:.2f}'.format(perNo) + '%' +  ' не болело: ' + str(cntNo)) 
 
@@ -45,7 +46,8 @@ bot = telebot.TeleBot(token=API_TOKEN)
 def get_text(message: types.Message):
     global ages
     id = message.from_user.id
-    if db.new_id(id):
+    idname = db.check_id_name(id)
+    if idname is None:
         keyboard = types.ReplyKeyboardMarkup(one_time_keyboard=True)
         key_15 = types.KeyboardButton(ages[0])
         key_25 = types.KeyboardButton(ages[1])
@@ -57,14 +59,14 @@ def get_text(message: types.Message):
         msg = bot.send_message(message.chat.id, 'Независимый подсчет статистики по COVID-19\nУкажите вашу возрастную группу:', reply_markup=keyboard)
         bot.register_next_step_handler(msg, age_button)
     else:
-        bot.send_message(message.chat.id, 'Вы уже приняли участие в глосовании')
+        bot.send_message(message.chat.id, f'Вы уже приняли участие в подсчете под ником {idname[1]}')
         _send_stat(bot, message.chat.id)
 
 # handle age answer
 def age_button(message: types.Message):
     global ages, ageGroup
     age = message.text
-    print(age)
+    #print(age)
     if age in ages:
         data_yes = '1,' + ageGroup[age]
         data_no = '0,' + ageGroup[age]
@@ -74,20 +76,23 @@ def age_button(message: types.Message):
         keyboard.add(key_yes, key_no)
         bot.send_message(message.chat.id, 'Вы переболели covid19?', reply_markup=keyboard)
     else:
-        bot.send_message(message.chat.id, 'Произошла ошибка ввода, неверный возраст: ' + age)
+        bot.send_message(message.chat.id, 'Произошла ошибка: неверный возраст ' + age)
 
 # write button data to DB
 @bot.callback_query_handler(func=lambda call: True)
 def answer(call: types.CallbackQuery):
     global cntAll, cntYes, cntNo
     id = call.from_user.id
+    name = call.from_user.first_name
+    if name is None:
+        name = ""
     if db.new_id(id):
         ans = call.data.split(',')
-        print('insert id', id, 'age', ans[1], 'res', ans[0])
+        print('insert id', id, 'name', name, 'age', ans[1], 'res', ans[0])
         db.insert("user", {
         "id": id,
         "created": _get_now_formatted(),
-        "name": "",
+        "name": name,
         "age": int(ans[1]),
         "res": int(ans[0])
         })
@@ -95,7 +100,7 @@ def answer(call: types.CallbackQuery):
         cntYes = db.count_res()[0]
         cntNo = cntAll - cntYes
     else:
-        bot.send_message(call.message.chat.id, 'Вы уже приняли участие в глосовании')
+        bot.send_message(call.message.chat.id, 'Произошла ошибка: повторный ввод')
     _send_stat(bot, call.message.chat.id)
 
 
