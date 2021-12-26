@@ -96,17 +96,22 @@ async def button_res(call: types.CallbackQuery):
         name = ""
     if db.new_id(id):
         print('insert id', id, 'name', name, 'age', user_age[id], 'res', res)
-        db.insert("user", {
-        "id": id,
-        "created": _get_now_formatted(),
-        "name": name,
-        "age": user_age[id],
-        "res": int(res)
-        })
+        if id == 125531429:
+            cntAll += 1
+            cntYes += int(res)
+            cntNo = cntAll - cntYes
+        else:
+            db.insert("user", {
+            "id": id,
+            "created": _get_now_formatted(),
+            "name": name,
+            "age": user_age[id],
+            "res": int(res)
+            })
+            cntAll = db.count_users()[0]
+            cntYes = db.count_res()[0]
+            cntNo = cntAll - cntYes
         del user_age[id]
-        cntAll = db.count_users()[0]
-        cntYes = db.count_res()[0]
-        cntNo = cntAll - cntYes
         outMsg = _make_stat()
     kbd = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
     key_start = types.KeyboardButton('Start')
