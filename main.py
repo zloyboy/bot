@@ -27,31 +27,21 @@ def _get_now_datetime() -> datetime.datetime:
     now = datetime.datetime.now(tz)
     return now
 
-def _make_bar(val: float) -> str:
-    out = ''
-    if 0 <= val <= 100:
-        cnt = round(val) // 5
-        out += '|'*cnt
-        out += '*'*(20 - cnt)
-    return out
-
-async def _send_stat(bot: Bot, id: int):
-    global cntAll, cntYes, cntNo
-    perYes = cntYes / cntAll * 100
-    perNo = cntNo / cntAll * 100
-    await bot.send_message(id,
-        'Независимая статистика по COVID-19' +
-        '\nОпрошено: ' + str(cntAll) +
-        '\n' + _make_bar(perYes) + ' {:.2f}'.format(perYes) + '%' + ' переболело: ' + str(cntYes) +
-        '\n' + _make_bar(perNo) + ' {:.2f}'.format(perNo) + '%' +  ' не болело: ' + str(cntNo))
+#def _make_bar(val: float) -> str:
+#    out = ''
+#    if 0 <= val <= 100:
+#        cnt = round(val) // 5
+#        out += '|'*cnt
+#        out += '*'*(20 - cnt)
+#    return out
 
 def _make_stat():
     global cntAll, cntYes, cntNo
     perYes = cntYes / cntAll * 100
     perNo = cntNo / cntAll * 100
     return 'Независимая статистика по COVID-19\nОпрошено: ' + str(cntAll) +\
-        '\n' + _make_bar(perYes) + ' {:.2f}'.format(perYes) + '%' + ' переболело: ' + str(cntYes) +\
-        '\n' + _make_bar(perNo) + ' {:.2f}'.format(perNo) + '%' +  ' не болело: ' + str(cntNo)
+        '\n' + ' {:.2f}'.format(perYes) + '%' + ' переболело: ' + str(cntYes) +\
+        '\n' + ' {:.2f}'.format(perNo) + '%' +  ' не болело: ' + str(cntNo)
 
 @dp.message_handler()
 async def start(message: types.Message):
@@ -78,7 +68,7 @@ async def start(message: types.Message):
         idname = db.check_id_name(id)
         if idname is None:
             user_age[id] = 0
-            keyboard = types.ReplyKeyboardMarkup(one_time_keyboard=True)
+            keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
             key_15 = types.KeyboardButton(ages[0])
             key_25 = types.KeyboardButton(ages[1])
             key_35 = types.KeyboardButton(ages[2])
@@ -89,12 +79,16 @@ async def start(message: types.Message):
             await bot.send_message(message.chat.id, 'Независимый подсчет статистики по COVID-19\nУкажите вашу возрастную группу:', reply_markup=keyboard)
         else:
             await bot.send_message(message.chat.id, f'Вы уже приняли участие в подсчете под ником {idname[1]}')
-            await bot.send_message(message.chat.id, _make_stat())
+            kbd = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+            key_start = types.KeyboardButton('Start')
+            kbd.add(key_start)
+            await bot.send_message(message.chat.id, _make_stat(), reply_markup=kbd)
 
 @dp.callback_query_handler()
 async def button_res(call: types.CallbackQuery):
-    # write button data to DB
+    # write poll results to DB
     global cntAll, cntYes, cntNo, user_age, bot
+    outMsg = 'Произошла ошибка: повторный ввод'
     res = call.data
     id = call.from_user.id
     name = call.from_user.first_name
@@ -113,9 +107,11 @@ async def button_res(call: types.CallbackQuery):
         cntAll = db.count_users()[0]
         cntYes = db.count_res()[0]
         cntNo = cntAll - cntYes
-        await bot.send_message(call.message.chat.id, _make_stat())
-    else:
-        await bot.send_message(call.message.chat.id, 'Произошла ошибка: повторный ввод')
+        outMsg = _make_stat()
+    kbd = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    key_start = types.KeyboardButton('Start')
+    kbd.add(key_start)
+    await bot.send_message(call.message.chat.id, outMsg, reply_markup=kbd)
 
 
 cntAll = db.count_users()[0]
