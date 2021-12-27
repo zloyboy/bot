@@ -40,78 +40,82 @@ def _make_stat():
     perYes = cntYes / cntAll * 100
     perNo = cntNo / cntAll * 100
     return 'Независимая статистика по COVID-19\nОпрошено: ' + str(cntAll) +\
-        '\n' + ' {:.2f}'.format(perYes) + '%' + ' переболело: ' + str(cntYes) +\
-        '\n' + ' {:.2f}'.format(perNo) + '%' +  ' не болело: ' + str(cntNo)
+        '\n' + '{:.2f}'.format(perYes) + '%' + ' переболело: ' + str(cntYes) +\
+        '\n' + '{:.2f}'.format(perNo) + '%' +  ' не болело: ' + str(cntNo)
 
 @dp.message_handler()
 async def start(message: types.Message):
-    global ages, ageGroup, user_age, bot
+    global ages, user_age, bot
     id = message.from_user.id
+    idname = db.check_id_name(id)
+    if idname is None:
+        # new user - send age question
+        user_age[id] = 0
+        keyboard = types.InlineKeyboardMarkup()
+        key_15 = types.InlineKeyboardButton(text=ages[0], callback_data=ages[0])
+        key_25 = types.InlineKeyboardButton(text=ages[1], callback_data=ages[1])
+        key_35 = types.InlineKeyboardButton(text=ages[2], callback_data=ages[2])
+        key_45 = types.InlineKeyboardButton(text=ages[3], callback_data=ages[3])
+        key_55 = types.InlineKeyboardButton(text=ages[4], callback_data=ages[4])
+        key_65 = types.InlineKeyboardButton(text=ages[5], callback_data=ages[5])
+        keyboard.add(key_15, key_25, key_35, key_45, key_55, key_65)
+        await bot.send_message(message.chat.id, 'Независимый подсчет статистики по COVID-19\nУкажите вашу возрастную группу:', reply_markup=keyboard)
+    else:
+        # exist user - send statistic
+        await bot.send_message(message.chat.id, f'Вы уже приняли участие в подсчете под ником {idname[1]}')
+        kbd = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        key_start = types.KeyboardButton('Start')
+        kbd.add(key_start)
+        await bot.send_message(message.chat.id, _make_stat(), reply_markup=kbd)
+        if id in user_age.keys():
+            del user_age[id]
+
+@dp.callback_query_handler()
+async def button_res(call: types.CallbackQuery):
+    global cntAll, cntYes, cntNo, user_age, bot
+    id = call.from_user.id
+    print('get', call.data)
     if id in user_age.keys():
-        # get age - send res question
         if user_age[id] == 0:
-            age = message.text
-            print('age', age)
+            # get age - send res question
+            age = call.data
             if age in ages:
                 user_age[id] = int(ageGroup[age])
                 keyboard = types.InlineKeyboardMarkup()
                 key_yes = types.InlineKeyboardButton(text = 'Да', callback_data = '1')
                 key_no = types.InlineKeyboardButton(text = 'Нет', callback_data = '0')
                 keyboard.add(key_yes, key_no)
-                await bot.send_message(message.chat.id, 'Вы переболели covid19?', reply_markup=keyboard)
+                await bot.send_message(call.message.chat.id, 'Вы переболели covid19?', reply_markup=keyboard)
+                return
             else:
-                await bot.send_message(message.chat.id, 'Произошла ошибка: неверный возраст ' + age)
+                await bot.send_message(call.message.chat.id, 'Произошла ошибка: неверный возраст ' + age)
         else:
-            await bot.send_message(message.chat.id, 'Произошла ошибка сервера')
-    else:
-        # new user - send age question
-        idname = db.check_id_name(id)
-        if idname is None:
-            user_age[id] = 0
-            keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-            key_15 = types.KeyboardButton(ages[0])
-            key_25 = types.KeyboardButton(ages[1])
-            key_35 = types.KeyboardButton(ages[2])
-            key_45 = types.KeyboardButton(ages[3])
-            key_55 = types.KeyboardButton(ages[4])
-            key_65 = types.KeyboardButton(ages[5])
-            keyboard.add(key_15, key_25, key_35, key_45, key_55, key_65)
-            await bot.send_message(message.chat.id, 'Независимый подсчет статистики по COVID-19\nУкажите вашу возрастную группу:', reply_markup=keyboard)
-        else:
-            await bot.send_message(message.chat.id, f'Вы уже приняли участие в подсчете под ником {idname[1]}')
+            # write poll results to DB
+            outMsg = 'Произошла ошибка: повторный ввод'
+            res = call.data
+            name = call.from_user.first_name
+            if name is None:
+                name = ""
+            if db.new_id(id):
+                print('insert id', id, 'name', name, 'age', user_age[id], 'res', res)
+                db.insert("user", {
+                "id": id,
+                "created": _get_now_formatted(),
+                "name": name,
+                "age": user_age[id],
+                "res": int(res)
+                })
+                cntAll = db.count_users()[0]
+                cntYes = db.count_res()[0]
+                cntNo = cntAll - cntYes
+                outMsg = _make_stat()
             kbd = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
             key_start = types.KeyboardButton('Start')
             kbd.add(key_start)
-            await bot.send_message(message.chat.id, _make_stat(), reply_markup=kbd)
-
-@dp.callback_query_handler()
-async def button_res(call: types.CallbackQuery):
-    # write poll results to DB
-    global cntAll, cntYes, cntNo, user_age, bot
-    outMsg = 'Произошла ошибка: повторный ввод'
-    res = call.data
-    id = call.from_user.id
-    name = call.from_user.first_name
-    if name is None:
-        name = ""
-    if db.new_id(id):
-        print('insert id', id, 'name', name, 'age', user_age[id], 'res', res)
-        db.insert("user", {
-        "id": id,
-        "created": _get_now_formatted(),
-        "name": name,
-        "age": user_age[id],
-        "res": int(res)
-        })
+            await bot.send_message(call.message.chat.id, outMsg, reply_markup=kbd)
         del user_age[id]
-        cntAll = db.count_users()[0]
-        cntYes = db.count_res()[0]
-        cntNo = cntAll - cntYes
-        outMsg = _make_stat()
-    kbd = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    key_start = types.KeyboardButton('Start')
-    kbd.add(key_start)
-    await bot.send_message(call.message.chat.id, outMsg, reply_markup=kbd)
+    else:
+        await bot.send_message(call.message.chat.id, 'Произошла ошибка сервера')
 
 
 cntAll = db.count_users()[0]
