@@ -20,9 +20,16 @@ def count_users():
     cursor.execute(f"SELECT count(*) FROM user")
     return cursor.fetchone()
 
-
 def count_res():
     cursor.execute(f"SELECT count(*) FROM user WHERE res=1")
+    return cursor.fetchone()
+
+def count_age(age: int):
+    cursor.execute(f"SELECT count(*) FROM user WHERE age={age}")
+    return cursor.fetchone()
+
+def count_age_res(age: int):
+    cursor.execute(f"SELECT count(*) FROM user WHERE age={age} AND res=1")
     return cursor.fetchone()
 
 

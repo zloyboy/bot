@@ -13,7 +13,8 @@ dp = Dispatcher(bot)
 
 
 cntAll, cntYes, cntNo = 0, 0, 0
-ages = ['до 20', '20-29', '30-39', '40-49', '50-59', '60 +']
+ages = ['до 20', '20-29', '30-39', '40-49', '50-59', '60 ++']
+ages_stat = [[0,0], [0,0], [0,0], [0,0], [0,0], [0,0]]
 ageGroup = {ages[0]: '15', ages[1]: '25', ages[2]: '35', ages[3]: '45', ages[4]: '55', ages[5]: '65'}
 user_age = {}
 
@@ -35,13 +36,31 @@ def _get_now_datetime() -> datetime.datetime:
 #        out += '*'*(20 - cnt)
 #    return out
 
+def _read_stat_from_db():
+    global cntAll, cntYes, cntNo, ages_stat, db
+    cntAll = db.count_users()[0]
+    cntYes = db.count_res()[0]
+    cntNo = cntAll - cntYes
+    for i in range(6):
+        ages_stat[i][0] = db.count_age(i*10 + 15)[0]
+        if 0 < ages_stat[i][0]:
+            ages_stat[i][1] = db.count_age_res(i*10 + 15)[0]
+
 def _make_stat():
-    global cntAll, cntYes, cntNo
+    global cntAll, cntYes, cntNo, ages_stat
     perYes = cntYes / cntAll * 100
     perNo = cntNo / cntAll * 100
+    perAge = [0, 0, 0, 0, 0, 0]
+    outAge = ''
+    for i in range(6):
+        if 0 < ages_stat[i][0]:
+            perAge[i] = ages_stat[i][1] / ages_stat[i][0] * 100
+        outAge += '\n' + str(ages[i]) + ' - ' + '{:.2f}'.format(perAge[i]) + '% ' + str(ages_stat[i][1]) + '/' + str(ages_stat[i][0])
     return 'Независимая статистика по COVID-19\nОпрошено: ' + str(cntAll) +\
         '\n' + '{:.2f}'.format(perYes) + '%' + ' переболело: ' + str(cntYes) +\
-        '\n' + '{:.2f}'.format(perNo) + '%' +  ' не болело: ' + str(cntNo)
+        '\n' + '{:.2f}'.format(perNo) + '%' +  ' не болело: ' + str(cntNo) +\
+        '\nЗаболеваемость по возрастным группам:' + outAge
+
 
 @dp.message_handler()
 async def start(message: types.Message):
@@ -85,7 +104,7 @@ async def button_res(call: types.CallbackQuery):
                 key_yes = types.InlineKeyboardButton(text = 'Да', callback_data = '1')
                 key_no = types.InlineKeyboardButton(text = 'Нет', callback_data = '0')
                 keyboard.add(key_yes, key_no)
-                await bot.send_message(call.message.chat.id, 'Вы переболели covid19?', reply_markup=keyboard)
+                await bot.send_message(call.message.chat.id, 'Вы переболели covid19?\n(по официальному мед.заключению)', reply_markup=keyboard)
                 return
             else:
                 await bot.send_message(call.message.chat.id, 'Произошла ошибка: неверный возраст ' + age)
@@ -105,9 +124,7 @@ async def button_res(call: types.CallbackQuery):
                 "age": user_age[id],
                 "res": int(res)
                 })
-                cntAll = db.count_users()[0]
-                cntYes = db.count_res()[0]
-                cntNo = cntAll - cntYes
+                _read_stat_from_db()
                 outMsg = _make_stat()
             kbd = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
             key_start = types.KeyboardButton('Start')
@@ -118,9 +135,7 @@ async def button_res(call: types.CallbackQuery):
         await bot.send_message(call.message.chat.id, 'Произошла ошибка сервера')
 
 
-cntAll = db.count_users()[0]
-cntYes = db.count_res()[0]
-cntNo = cntAll - cntYes
+_read_stat_from_db()
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
