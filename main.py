@@ -1,10 +1,9 @@
 import os
-import datetime
-import pytz
+import time, datetime, pytz
 import db
 import aiogram
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 API_TOKEN = os.getenv('TELEGRAM_API_TOKEN')
@@ -17,6 +16,9 @@ ages = ['до 20', '20-29', '30-39', '40-49', '50-59', '60 ++']
 ages_stat = [[0,0], [0,0], [0,0], [0,0], [0,0], [0,0]]
 ageGroup = {ages[0]: '15', ages[1]: '25', ages[2]: '35', ages[3]: '45', ages[4]: '55', ages[5]: '65'}
 user_age = {}
+user_timestamp = {}
+repeat_msg = '\nДля повторного показа статистики введите любой текст или нажмите Start, но не ранее чем через 10 секунд'
+
 
 def _get_now_formatted() -> str:
     """Возвращает сегодняшнюю дату строкой"""
@@ -66,6 +68,16 @@ def _make_stat():
 async def start(message: types.Message):
     global ages, user_age, bot
     id = message.from_user.id
+    # repeat start timeout is 10 sec
+    curr_time = int(time.time())
+    if id in user_timestamp.keys():
+        #print('timeout', curr_time - user_timestamp[id])
+        if 10 < curr_time - user_timestamp[id]:
+            user_timestamp[id] = curr_time
+        else:
+            return
+    else:
+        user_timestamp[id] = curr_time
     idname = db.check_id_name(id)
     if idname is None:
         # new user - send age question
@@ -81,7 +93,7 @@ async def start(message: types.Message):
         await bot.send_message(message.chat.id, 'Независимый подсчет статистики по COVID-19\nУкажите вашу возрастную группу:', reply_markup=keyboard)
     else:
         # exist user - send statistic
-        await bot.send_message(message.chat.id, f'Вы уже приняли участие в подсчете под ником {idname[1]}')
+        await bot.send_message(message.chat.id, f'Вы уже приняли участие в подсчете под именем {idname[1]}' + repeat_msg)
         kbd = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
         key_start = types.KeyboardButton('Start')
         kbd.add(key_start)
@@ -93,7 +105,6 @@ async def start(message: types.Message):
 async def button_res(call: types.CallbackQuery):
     global cntAll, cntYes, cntNo, user_age, bot
     id = call.from_user.id
-    print('get', call.data)
     if id in user_age.keys():
         if user_age[id] == 0:
             # get age - send res question
@@ -126,10 +137,11 @@ async def button_res(call: types.CallbackQuery):
                 })
                 _read_stat_from_db()
                 outMsg = _make_stat()
+            await bot.send_message(call.message.chat.id, outMsg)
             kbd = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
             key_start = types.KeyboardButton('Start')
             kbd.add(key_start)
-            await bot.send_message(call.message.chat.id, outMsg, reply_markup=kbd)
+            await bot.send_message(call.message.chat.id, repeat_msg, reply_markup=kbd)
         del user_age[id]
     else:
         await bot.send_message(call.message.chat.id, 'Произошла ошибка сервера')
